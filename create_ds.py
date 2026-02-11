@@ -5,6 +5,7 @@ from pathlib import Path
 from os.path import exists
 from torch.utils.data import DataLoader
 from symusic import Score
+import os
 
 TOKENIZER_PARAMS = {
 
@@ -29,9 +30,8 @@ def create_tokenizer(midis_dir: Path, tokenizer_dir: Path, tokenizer_params: dic
     root_dir = midis_dir.resolve()
     midi_paths = list(root_dir.glob("**/*.mid"))
 
-    tokenizer.train(vocab_size=30000, files_paths=midi_paths)
+    #tokenizer.train(vocab_size=30000, files_paths=midi_paths)
     tokenizer.save_pretrained(tokenizer_dir)
-    tokenizer.push_to_hub("0berheim/midi-tokenizer", private=True, token="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")
 
     return tokenizer
 
@@ -48,17 +48,18 @@ def create_dataloader(midis_path: Path, tokenizer: REMI) -> DataLoader:
 
     dataset_chunks_dir = Path(str(midis_path), "chunks")
 
-    split_files_for_training(
-        files_paths=list(midis_path.resolve().glob("**/*.mid")),
-        tokenizer=tokenizer,
-        save_dir=dataset_chunks_dir,
-        max_seq_len=1024
-    )
+    if len(os.listdir(Path(dataset_chunks_dir))) <= 1:
+        split_files_for_training(
+            files_paths=list(midis_path.resolve().glob("**/*.mid")),
+            tokenizer=tokenizer,
+            save_dir=dataset_chunks_dir,
+            max_seq_len=512
+        )
 
     dataset = DatasetMIDI(
         files_paths=list(dataset_chunks_dir.glob("**/*.mid")),
         tokenizer=tokenizer,
-        max_seq_len=1024
+        max_seq_len=512
     )
 
     collator = DataCollator(tokenizer.pad_token_id)
@@ -68,27 +69,27 @@ def create_dataloader(midis_path: Path, tokenizer: REMI) -> DataLoader:
 
 if __name__ == "__main__":
 
-    '''
+    
     if not exists(Path("tokenizer/tokenizer.json")):
-        tokenizer = create_tokenizer(Path("./ds/nes"), Path("./tokenizer"), TOKENIZER_PARAMS)
+        tokenizer = create_tokenizer(Path("./ds/preprocessed"), Path("./tokenizer"), TOKENIZER_PARAMS)
 
     else:
         tokenizer = open_tokenizer(Path("./tokenizer"))
 
-    data_loader = create_dataloader(Path("./ds/nes"), tokenizer)
-
-    batch = next(iter(data_loader))
-    print(type(batch))
-    print(batch.keys())
-
-    ids = batch["input_ids"][0].tolist()
-
-    byte_token = tokenizer._model.id_to_token(ids[11])
-    print(tokenizer._vocab_learned_bytes_to_tokens[byte_token])
-    '''
-
-    tokenizer = REMI(TokenizerConfig(**TOKENIZER_PARAMS))
-    tokens = tokenizer(Score("ds/ctayla.mid"))
     
-    for token in tokens[2].tokens:
-        print(token)
+    data_loader = create_dataloader(Path("./ds/preprocessed"), tokenizer)
+ 
+    for batch in data_loader:
+        ids = batch["input_ids"][0].tolist()
+        print(len(ids))
+        #print(ids.count(0))
+
+
+
+        
+    
+    
+
+    
+
+    
