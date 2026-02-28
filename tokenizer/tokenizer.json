@@ -9,10 +9,12 @@
             "4_12": 4
         },
         "num_velocities": 32,
-        "remove_duplicated_notes": false,
+        "remove_duplicated_notes": true,
         "encode_ids_split": "bar",
         "special_tokens": [
-            "PAD_None"
+            "PAD_None",
+            "BOS_None",
+            "EOS_None"
         ],
         "use_velocities": false,
         "use_note_duration_programs": [
@@ -153,7 +155,7 @@
         "use_sustain_pedals": false,
         "use_pitch_bends": false,
         "use_programs": false,
-        "use_pitch_intervals": false,
+        "use_pitch_intervals": true,
         "use_pitchdrum_tokens": true,
         "default_note_duration": 0.5,
         "programs": [

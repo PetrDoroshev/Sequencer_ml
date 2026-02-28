@@ -6,6 +6,22 @@ from os.path import exists
 import os
 import math
 
+
+def directory_min_max_pitch(midis_dir: Path):
+
+    pitches = []
+    midis = midis_dir.glob("**/*.mid")
+
+    for midi in midis:
+
+        score = Score(midi)
+
+        for track in score.tracks:
+            for note in track.notes:
+                pitches.append(note.pitch)
+
+    return min(pitches), max(pitches)
+
 def track_bars_count(score: ScoreTick, track: TrackTick) -> int:
     
     if track.note_num() == 0:
@@ -24,14 +40,17 @@ def notes_per_bar(score: ScoreTick, track: TrackTick) -> float:
 
 def is_track_poly(track: TrackTick) -> bool:
     
-    note_start_set = set()
+    if len(track.notes) < 2:
+        return False
 
-    for note in track.notes:
+    notes = sorted(track.notes, key=lambda n: n.time)
 
-        if note.time not in note_start_set:
-            note_start_set.add(note.time)
-        else:
+    prev_end = notes[0].time + notes[0].duration
+
+    for note in notes[1:]:
+        if note.time < prev_end:
             return True
+        prev_end = max(prev_end, note.time + note.duration)
 
     return False
 
@@ -112,20 +131,37 @@ def split_track(score: ScoreTick, track: TrackTick, max_bar_gap: int) -> List[Tr
         splited_tracks.append(new_track)
 
     return splited_tracks
+
+def trim_track(track: TrackTick) -> TrackTick:
+    pass
+
+def is_track_valid(track: TrackTick) -> bool:
+
+    return (not is_track_poly(track) and not track.is_drum and track.note_num() > 0)
     
 if __name__ == "__main__":
 
-    midis_dir = "./ds/nes"
-    preprocessed_dir = "./ds/preprocessed"
-    discarded_count = 0
+    midis_dir = "./ds/lmd/lmd_full"
+    preprocessed_dir = "./ds/lmd/preprocessed"
 
-    for filename in os.listdir(Path(midis_dir)):
+    if not os.path.exists(Path(preprocessed_dir)):
+        os.mkdir(Path(preprocessed_dir))
+
+    discarded_count = 0
+    total_files = 0
+    faulty_files = 0
+    
+    for filename in list(Path(midis_dir).glob("**/*.mid")):
 
         print(f"Processing file: {filename}")
-
+        total_files += 1
+        
         try:
-            score = Score(Path(midis_dir, filename))
-        except ValueError:
+            score = Score(filename)
+        except Exception as e:
+            print(e)
+            print(f"Unable to open file: {filename}")
+            faulty_files += 1
             continue
 
         tracks = []
@@ -135,34 +171,24 @@ if __name__ == "__main__":
 
         for track in score.tracks:
 
-            if (not is_track_poly(track) and 
-                not track.is_drum and
-                    track.note_num() > 0):
+            if not is_track_valid(track):
+                continue
 
-                tracks.append(track)
-
-        score.tracks = tracks
-        tracks.clear()
-
-        for track in score.tracks:
             for splitted_track in split_track(score, track, 1):
-                tracks.append(splitted_track)
 
-        score.tracks = tracks
-        tracks.clear()
+                bars_count = track_bars_count(score, splitted_track)
+                note_density = notes_per_bar(score, splitted_track)
 
-        for track in score.tracks:
+                if bars_count >= 2 and 2 <= note_density <= 32:
+                    tracks.append(splitted_track)
 
-            if 4 <= track_bars_count(score, track) <= 16 and 4 <= notes_per_bar(score, track) <= 16:
-                tracks.append(track)
-
-        score.tracks = tracks
-
-        if score.tracks:
+        if tracks:
             score.tracks = tracks
-            score.dump_midi(Path(preprocessed_dir, filename))
+            score.dump_midi(Path(preprocessed_dir, filename.name))
         else:
             discarded_count += 1
-        
+    
+    print(f"total_files: {total_files}")
+    print(f"faulty_files: {faulty_files}")
     print(f"discarted_files: {discarded_count}")
 
