@@ -4,3 +4,6 @@ huggingface-hub==0.22.2
 symusic
 
 
+scikit-learn
+tqdm
+scipy

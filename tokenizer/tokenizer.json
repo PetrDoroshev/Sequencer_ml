@@ -1,8 +1,8 @@
 {
     "config": {
         "pitch_range": [
-            21,
-            109
+            0,
+            127
         ],
         "beat_res": {
             "0_4": 8,

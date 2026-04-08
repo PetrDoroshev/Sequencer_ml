@@ -10,9 +10,7 @@ import matplotlib.pyplot as plt
 
 
 def generate_melody(model, tokenizer, bos_id, eos_id, max_len=512, temperature=1.0, z=None, device='cpu'):
-    """
-    Генерирует мелодию и возвращает список токенов (без BOS, обрезанный по EOS).
-    """
+
     model.eval()
     with torch.no_grad():
         start_token = torch.tensor([bos_id], device=device)
@@ -20,6 +18,7 @@ def generate_melody(model, tokenizer, bos_id, eos_id, max_len=512, temperature=1
             z = torch.randn(1, model.latent_dim, device=device)
         else:
             z = z.unsqueeze(0).to(device) if z.dim() == 1 else z.to(device)
+            z[0, 0] = 1.8
         print(start_token)
         # Генерация последовательности токенов (включая BOS)
         generated = model.generate(start_token, z=z, max_len=max_len, temperature=temperature)
@@ -159,11 +158,11 @@ def val_latent():
 
 if __name__ == "__main__":
 
-    midi_dir = "./ds/lakhmidi/preprocessed"
+    midi_dir = "./ds/nes_folk/preprocessed"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tok_dir = Path("./tokenizer")
-    model_path = "vae_epoch50 (1).pt"
+    model_path = "best_ar_vae.pt"
 
     tokenizer = REMI.from_pretrained(tok_dir, local_files_only=True)
     vocab_size = tokenizer.vocab_size
@@ -179,7 +178,7 @@ if __name__ == "__main__":
 
     #train_loader = create_dataloader(Path("./ds/lakhmidi/preprocessed"), tokenizer)
 
-    tokens1 = generate_melody(model, tokenizer, bos_id, eos_id, max_len=32, temperature=1.0, device=device)
+    tokens1 = generate_melody(model, tokenizer, bos_id, eos_id, max_len=128, temperature=1.0, device=device)
     score1 = tokenizer.decode([tokens1])
     score1.dump_midi("generated_cold.mid")
     

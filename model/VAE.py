@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import math
+from typing import List, Optional
 from model.encoder import EncoderLSTM
 from model.decoder import DecoderLSTM
 
@@ -34,19 +35,31 @@ class VAE(nn.Module):
 
         return logits, mu, logvar
     
-    def generate(self, start_token, z=None, max_len=512, temperature=1.0):
+    @torch.jit.export
+    def generate(
+        self,
+        start_token: torch.Tensor,
+        z: Optional[torch.Tensor] = None,
+        max_len: int = 512,
+        temperature: float = 1.0,
+    ) -> torch.Tensor:
+
+        # Accept both (batch,) and (batch, 1) start tokens for C++ convenience.
+        if start_token.dim() == 2 and start_token.size(1) == 1:
+            start_token = start_token.squeeze(1)
 
         batch_size = start_token.size(0)
         device = start_token.device
 
         if z is None:
-            z = torch.randn(batch_size, self.latent_dim, device=device)
+            z = torch.randn((batch_size, self.latent_dim), device=device)
 
-        hidden = None
-        cell = None
-        x = start_token.unsqueeze(1)   # (batch, 1)
-        print(x.size())
-        generated = [start_token]
+        hidden = torch.jit.annotate(Optional[torch.Tensor], None)
+        cell = torch.jit.annotate(Optional[torch.Tensor], None)
+        x = start_token.unsqueeze(1)  # (batch, 1)
+
+        generated = torch.jit.annotate(List[torch.Tensor], [])
+        generated.append(start_token)
 
         for _ in range(max_len):
             logits, hidden, cell = self.decoder(x, z, hidden, cell)

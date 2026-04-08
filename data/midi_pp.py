@@ -3,14 +3,24 @@ from symusic import Score
 from symusic.core import TrackTick, ScoreTick, TimeSignatureTick
 from pathlib import Path
 from os.path import exists
+from tqdm import tqdm
 import os
 import math
+import mido
+
+def is_midi_valid(filepath: Path) -> bool:
+    try:
+        mido.MidiFile(filepath)
+        return True
+    except Exception as e:
+        print(f"Ошибка в {filepath}: {e}")
+        return False
 
 
 def directory_min_max_pitch(midis_dir: Path):
 
     pitches = []
-    midis = midis_dir.glob("**/*.mid")
+    midis = list(midis_dir.glob("**/*.mid"))
 
     for midi in midis:
 
@@ -137,12 +147,12 @@ def trim_track(track: TrackTick) -> TrackTick:
 
 def is_track_valid(track: TrackTick) -> bool:
 
-    return (not is_track_poly(track) and not track.is_drum and track.note_num() > 0)
+    return (not track.is_drum and track.note_num() > 0)
     
 if __name__ == "__main__":
 
-    midis_dir = "./ds/lmd/lmd_full"
-    preprocessed_dir = "./ds/lmd/preprocessed"
+    midis_dir = "./ds/vgmusic_midi/full"
+    preprocessed_dir = "./ds/vgmusic_midi/preprocessed"
 
     if not os.path.exists(Path(preprocessed_dir)):
         os.mkdir(Path(preprocessed_dir))
@@ -151,10 +161,15 @@ if __name__ == "__main__":
     total_files = 0
     faulty_files = 0
     
-    for filename in list(Path(midis_dir).glob("**/*.mid")):
+    for filename in tqdm(list(Path(midis_dir).glob("**/*.mid"))):
 
-        print(f"Processing file: {filename}")
+        #print(f"Processing file: {filename}")
         total_files += 1
+
+        if not is_midi_valid(filename):
+            print(f"Invalid midi file: {filename}")
+            faulty_files += 1
+            continue
         
         try:
             score = Score(filename)
@@ -175,6 +190,9 @@ if __name__ == "__main__":
                 continue
 
             for splitted_track in split_track(score, track, 1):
+                
+                if is_track_poly(splitted_track):
+                    continue
 
                 bars_count = track_bars_count(score, splitted_track)
                 note_density = notes_per_bar(score, splitted_track)
@@ -184,7 +202,7 @@ if __name__ == "__main__":
 
         if tracks:
             score.tracks = tracks
-            score.dump_midi(Path(preprocessed_dir, filename.name))
+            score.dump_midi(Path(preprocessed_dir, f"{filename.parts[-2]}_{filename.name}"))
         else:
             discarded_count += 1
     

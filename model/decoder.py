@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from typing import Optional
 import math
 
 
@@ -24,7 +25,7 @@ class DecoderLSTM(nn.Module):
         self.z_to_hidden = nn.Linear(latent_dim, hidden_dim * num_layers)
         self.z_to_cell = nn.Linear(latent_dim, hidden_dim * num_layers)
 
-    def forward(self, x, z, hidden=None, cell=None):
+    def forward(self, x, z, hidden:Optional[torch.Tensor]=None, cell:Optional[torch.Tensor]=None):
       
         batch_size, seq_len = x.size()
         embedded = self.dropout(self.embedding(x))

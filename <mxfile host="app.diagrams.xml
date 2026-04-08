@@ -1,0 +1,141 @@
+<mxfile host="app.diagrams.net" modified="2024-03-31T00:00:00.000Z" agent="5.0" version="22.1.0" type="device">
+  <diagram name="Page-1" id="page1">
+    <mxGraphModel dx="1434" dy="844" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Вход src -->
+        <mxCell id="input_src" value="src (batch, seq_len)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- Embedding энкодера -->
+        <mxCell id="embed_enc" value="Embedding(vocab=420 → 256)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="input_src" target="embed_enc">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- LSTM энкодера -->
+        <mxCell id="lstm_enc" value="LSTM(256, hidden=256, num_layers=2, dropout=0.3)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="embed_enc" target="lstm_enc">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- fc_mu и fc_logvar -->
+        <mxCell id="fc_mu" value="fc_mu (256 → 64)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="290" width="70" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="fc_logvar" value="fc_logvar (256 → 64)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="130" y="290" width="70" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="lstm_enc" target="fc_mu">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="lstm_enc" target="fc_logvar">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- μ, logσ и репараметризация -->
+        <mxCell id="mu_logvar" value="μ, logσ (batch, 64)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="380" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="fc_mu" target="mu_logvar">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="fc_logvar" target="mu_logvar">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="reparam" value="Reparameterization: z = μ + ε·σ" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="460" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="mu_logvar" target="reparam">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="z" value="z (batch, 64)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="540" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="reparam" target="z">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Вход декодера tgt -->
+        <mxCell id="input_tgt" value="tgt (batch, seq_len)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- Embedding декодера -->
+        <mxCell id="embed_dec" value="Embedding(vocab=420 → 256)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="120" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="input_tgt" target="embed_dec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Конкатенация с z -->
+        <mxCell id="concat" value="Concatenate: emb (256) + z (64) → 320" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="200" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="embed_dec" target="concat">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="z" target="concat">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="240" y="560" as="sourcePoint"/>
+            <mxPoint x="400" y="225" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="240" y="560"/>
+              <mxPoint x="240" y="225"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+        <!-- LSTM декодера -->
+        <mxCell id="lstm_dec" value="LSTM(320, hidden=256, num_layers=2, dropout=0.5)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="290" width="160" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="concat" target="lstm_dec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Линейный слой -->
+        <mxCell id="linear" value="Linear (256 → vocab 420)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="380" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="lstm_dec" target="linear">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Выход logits -->
+        <mxCell id="logits" value="logits (batch, seq_len, vocab)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="320" y="460" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="linear" target="logits">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Дополнительные стрелки: инициализация состояний декодера от z -->
+        <mxCell id="z_to_hidden" value="z_to_hidden: 64→512 (init hidden)" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="1">
+          <mxGeometry x="160" y="480" width="130" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="arrow15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;dashed=1;" edge="1" parent="1" source="z" target="lstm_dec">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="200" y="560" as="sourcePoint"/>
+            <mxPoint x="320" y="315" as="targetPoint"/>
+            <Array as="points">
+              <mxPoint x="200" y="560"/>
+              <mxPoint x="200" y="315"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

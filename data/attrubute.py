@@ -1,39 +1,66 @@
-from __future__ import annotations
-from typing import List, Optional, Sequence, Tuple
+import symusic
 from symusic.core import ScoreTick, TrackTick
 from symusic import Score
-from pathlib import Path
 from pandas import DataFrame
-from midi_pp import directory_min_max_pitch
+from typing import List, Optional, Tuple
+from pathlib import Path
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-import os
+import math
+import pandas as pd
+import numpy as np  
 
-def _get_bar_duration_ticks(score: ScoreTick) -> int:
+def get_bar_duration_ticks(score: ScoreTick) -> int:
+
     if not score.time_signatures:
-        numerator = 4
-        denominator = 4
-    else:
-        ts = score.time_signatures[0]
-        numerator = ts.numerator
-        denominator = ts.denominator
 
-    return score.ticks_per_quarter * numerator * 4 // denominator
+        return score.ticks_per_quarter * 4
 
+    ts = score.time_signatures[0]
+ 
+    beats_per_bar = ts.numerator * 4 / ts.denominator
+    return int(score.ticks_per_quarter * beats_per_bar)
 
-def _track_bars_count(score: ScoreTick, track: TrackTick) -> int:
-    if track.note_num() == 0:
-        return 0
+def bar_duration_ticks(score: ScoreTick) -> int:
 
-    bar_ticks = _get_bar_duration_ticks(score)
-    return (track.end() + bar_ticks - 1) // bar_ticks
+    ts = score.time_signatures[0] if score.time_signatures else None
+    numerator = ts.numerator if ts else 4
+    denominator = ts.denominator if ts else 4
 
+    return int(score.ticks_per_quarter * 4 * numerator / denominator)
 
-def default_toussaint_weights(n: int = 24) -> List[float]:
-    if n <= 0:
-        return []
+def quantize_bar(
+    score: ScoreTick,
+    track: TrackTick,
+    bar_index: int,
+    n_slots: int = 24
+) -> Tuple[List[int], List[int]]:
+  
+    bar_ticks = get_bar_duration_ticks(score)
+    bar_start = bar_index * bar_ticks
+    bar_end = bar_start + bar_ticks
+
+    onsets = [0] * n_slots
+    pitches = [0] * n_slots
+
+    for note in track.notes:
+        if note.time < bar_start or note.time >= bar_end:
+            continue
+        pos = note.time - bar_start
+        slot = int(pos * n_slots / bar_ticks)
+  
+        slot = max(0, min(slot, n_slots - 1))
+        onsets[slot] = 1
+
+        if note.pitch > pitches[slot]:
+            pitches[slot] = note.pitch
+
+    return onsets, pitches
+
+def toussaint_weights(n_slots: int = 24) -> List[float]:
+
     weights = []
-    for t in range(n):
+    for t in range(n_slots):
         if t % 6 == 0:
             weights.append(1.0)
         elif t % 3 == 0:
@@ -45,193 +72,150 @@ def default_toussaint_weights(n: int = 24) -> List[float]:
     return weights
 
 
-def _quantize_bar_onsets(
-    score: ScoreTick,
-    track: TrackTick,
-    bar_index: int,
-    slots: int,
-) -> Tuple[List[int], List[int]]:
-    bar_ticks = _get_bar_duration_ticks(score)
-    bar_start = bar_index * bar_ticks
-    bar_end = bar_start + bar_ticks
-
-    onsets = [0] * slots
-    midi_vals = [0] * slots
-
-    for note in track.notes:
-        if note.time < bar_start or note.time >= bar_end:
-            continue
-        pos = note.time - bar_start
-        slot = int(pos * slots / bar_ticks)
-        if slot < 0:
-            slot = 0
-        elif slot >= slots:
-            slot = slots - 1
-
-        onsets[slot] = 1
-        if note.pitch > midi_vals[slot]:
-            midi_vals[slot] = int(note.pitch)
-
-    return onsets, midi_vals
-
-
-def rhythmic_complexity(
-    score: ScoreTick,
-    track: TrackTick,
-    bar_index: int,
-    slots: int = 24,
-    weights: Optional[Sequence[float]] = None,
+def rhythmic_complexity_for_bar(
+    onsets: List[int],
+    weights: Optional[List[float]] = None
 ) -> float:
-    if slots <= 0:
-        return 0.0
 
+    n = len(onsets)
     if weights is None:
-        weights = default_toussaint_weights(slots)
-    if len(weights) != slots:
-        raise ValueError("weights length must match slots")
+        weights = toussaint_weights(n)
+    total_weight = sum(weights)
+    if total_weight == 0:
+        return 0.0
+    weighted = sum(o * w for o, w in zip(onsets, weights))
+    return weighted / total_weight
 
-    onsets, _ = _quantize_bar_onsets(score, track, bar_index, slots)
-
-    num = 0.0
-    den = 0.0
-    for t in range(slots):
-        w = float(weights[t])
-        den += w
-        if onsets[t] == 1:
-            num += w
-    return 0.0 if den == 0 else num / den
-
-
-def pitch_range(
-    score: ScoreTick,
-    track: TrackTick,
-    bar_index: int,
-    r_norm: float,
-    slots: int = 24,
+def pitch_range_for_bar(
+    pitches: List[int],
+    r_norm: float
 ) -> float:
-    if r_norm <= 0:
-        raise ValueError("r_norm must be > 0")
+    
+    if not pitches:
+        return 0.0
+    return (max(pitches) - min(pitches)) / r_norm
 
-    _, midi_vals = _quantize_bar_onsets(score, track, bar_index, slots)
-    if not midi_vals:
+def note_density_for_bar(
+    score: ScoreTick,
+    track: TrackTick, 
+    min_note_fraction=1/16
+) -> float:
+    
+    if track.note_num() == 0:
         return 0.0
 
-    return (max(midi_vals) - min(midi_vals)) / r_norm
+    bar_ticks = bar_duration_ticks(score)
+    duration_ticks = track.end()
+    num_bars = duration_ticks / bar_ticks
+
+    density = track.note_num() / num_bars
+
+    max_notes_per_bar = 1.0 / min_note_fraction
+    return min(density / max_notes_per_bar, 1.0)
 
 
-def note_density(
-    score: ScoreTick,
+def contour_for_bar(
     track: TrackTick,
-    bar_index: int,
-    slots: int = 24,
+    r_norm: float
 ) -> float:
-    if slots <= 0:
+  
+    notes = sorted(track.notes, key=lambda n: n.time)
+    if len(notes) < 2:
         return 0.0
-
-    onsets, _ = _quantize_bar_onsets(score, track, bar_index, slots)
-    return sum(onsets) / slots
-
-
-def contour(
-    score: ScoreTick,
-    track: TrackTick,
-    bar_index: int,
-    r_norm: float,
-    slots: int = 24,
-) -> float:
-    if r_norm <= 0:
-        raise ValueError("r_norm must be > 0")
-
-    _, midi_vals = _quantize_bar_onsets(score, track, bar_index, slots)
-    if len(midi_vals) < 2:
-        return 0.0
-
-    total = 0.0
-    for t in range(len(midi_vals) - 1):
-        total += (midi_vals[t + 1] - midi_vals[t])
-
-    return total / r_norm
-
-
-def compute_attributes_for_bar(
-    score: ScoreTick,
-    track: TrackTick,
-    bar_index: int,
-    r_norm: float,
-    slots: int = 24,
-    weights: Optional[Sequence[float]] = None,
-) -> dict:
-    return {
-        "rhythmic_complexity": rhythmic_complexity(score, track, bar_index, slots=slots, weights=weights),
-        "pitch_range": pitch_range(score, track, bar_index, r_norm=r_norm, slots=slots),
-        "note_density": note_density(score, track, bar_index, slots=slots),
-        "contour": contour(score, track, bar_index, r_norm=r_norm, slots=slots),
-    }
-
+    directions = [1 if notes[i+1].pitch > notes[i].pitch else -1 if notes[i+1].pitch < notes[i].pitch else 0 for i in range(len(notes)-1)]
+    return sum(directions) / len(directions)
 
 def compute_attributes_for_track(
     score: ScoreTick,
     track: TrackTick,
     r_norm: float,
-    slots: int = 24,
-    weights: Optional[Sequence[float]] = None,
-) -> List[dict]:
+    n_slots: int = 24,
+    include_rhythmic: bool = False
+) -> dict:
     
-    bars = _track_bars_count(score, track)
+    bar_ticks = get_bar_duration_ticks(score)
+    total_ticks = track.end()
+    n_bars = (total_ticks + bar_ticks - 1) // bar_ticks
 
-    per_bar = [
-        compute_attributes_for_bar(score, track, bar_index=i, r_norm=r_norm, slots=slots, weights=weights)
-        for i in range(bars)
-    ]
+    sums = {
+        "pitch_range": 0.0,
+        "note_density": 0.0,
+        "contour": 0.0,
+    }
 
-    return {
-            "rhythmic_complexity": sum(d["rhythmic_complexity"] for d in per_bar) / bars,
-            "pitch_range": sum(d["pitch_range"] for d in per_bar) / bars,
-            "note_density": sum(d["note_density"] for d in per_bar) / bars,
-            "contour": sum(d["contour"] for d in per_bar) / bars,
-        }
+    for bar_idx in range(n_bars):
+        onsets, pitches = quantize_bar(score, track, bar_idx, n_slots)
+        sums["pitch_range"] += pitch_range_for_bar(pitches, r_norm)
+        sums["note_density"] += note_density_for_bar(score, track)
+        sums["contour"] += contour_for_bar(track, r_norm)
+        #sums['rythmic_complexity'] += rhythmic_complexity_for_bar(onsets)
+       
+    if n_bars == 0:
+        return {k: 0.0 for k in sums}
+    return {k: v / n_bars for k, v in sums.items()}
+
+def plot_attributes(csv_path: Path, attr_dict):
+
+    df = pd.read_csv(csv_path)
+    dict_df = df.to_dict()
+
+    for key in dict_df.keys():
+
+        attr_dict[key] = list(dict_df[key].values())
+    
+    plt.hist(attr_dict["pitch_range"], bins=10)
+    plt.title("Распределение атрибута")
+    plt.show()
+
+    plt.hist(attr_dict["note_density"], bins=10)
+    plt.title("Распределение атрибута")
+    plt.show()
+
+    '''
+    plt.hist(attr_dict["rythmic_complexity"], bins=20)
+    plt.title("Распределение атрибута")
+    plt.show()
+    '''
+
+    plt.hist(attr_dict["contour"], bins=10)
+    plt.title("Распределение атрибута")
+    plt.show()
 
 
 if __name__ == "__main__":
 
-    MIDIS_DIR = Path("./ds/lakhmidi/chunks_dedup")
+    from midi_pp import directory_min_max_pitch
+
+    CSV_PATH = Path("./vgmusic_aug.csv")
+
+    MIDIS_DIR = Path("./ds/vgmusic_midi/undersampled_aug")
+
     MIN_PITCH, MAX_PITCH = directory_min_max_pitch(MIDIS_DIR)
+    PITCH_DIFF = MAX_PITCH - MIN_PITCH
 
     attr_dict = {"path": [], 
-                 "pitch_range": [], 
+                 "pitch_range": [],
                  "note_density": [],
-                 "rhythmic_complexity": [],
                  "contour": []}
+    
+    for file in tqdm(list(MIDIS_DIR.glob("**/*.mid"))):
 
-    for file in tqdm(list(MIDIS_DIR.resolve().glob("**/*.mid"))):
+        score = Score(file.resolve())
+        attributes = compute_attributes_for_track(score, score.tracks[0], PITCH_DIFF,
+                            n_slots=24)
 
-        score = Score(MIDIS_DIR / file)
-        attributes = compute_attributes_for_track(score, score.tracks[0], MAX_PITCH - MIN_PITCH)
-
-        full_filename = str(Path(MIDIS_DIR / file).resolve())  
+        full_filename = str(Path(file))  
 
         attr_dict["path"].append(full_filename)
 
         for attribute in attributes.keys():
 
             attr_dict[attribute].append(attributes[attribute])
-
-    plt.hist(attr_dict["pitch_range"], bins=20)
-    plt.title("Распределение атрибута")
-    plt.show()
-
-    plt.hist(attr_dict["note_density"], bins=20)
-    plt.title("Распределение атрибута")
-    plt.show()
-
-    plt.hist(attr_dict["rhythmic_complexity"], bins=20)
-    plt.title("Распределение атрибута")
-    plt.show()
-
-    plt.hist(attr_dict["contour"], bins=20)
-    plt.title("Распределение атрибута")
-    plt.show()
-
-
+    
+    
     df = DataFrame(attr_dict)
-    df.to_csv("attrs.csv")
+    df.to_csv(CSV_PATH, header=True, index=False)
+    
+    
+    plot_attributes(CSV_PATH, attr_dict)
+
